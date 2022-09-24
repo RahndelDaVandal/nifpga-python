@@ -27,20 +27,20 @@ class Bitfile(object):
 
         project = tree.find("Project")
         nifpga = project.find("CompilationResultsTree") \
-                        .find("CompilationResults") \
-                        .find("NiFpga")
+                            .find("CompilationResults") \
+                            .find("NiFpga")
         self._base_address_on_device = int(nifpga.find("BaseAddressOnDevice").text)
         self._registers = {}
         for reg_xml in tree.find("VI").find("RegisterList"):
             try:
                 reg = Register(reg_xml)
                 assert reg.name not in self._registers, \
-                    "One or more registers have the same name '%s', this is not supported" % reg.name
+                        "One or more registers have the same name '%s', this is not supported" % reg.name
                 self._registers[reg.name] = reg
             except UnsupportedTypeError as e:
-                warn("Skipping Register: %s, %s" % (reg_xml.find("Name").text, str(e)))
+                warn(f'Skipping Register: {reg_xml.find("Name").text}, {str(e)}')
             except ClusterMustContainUniqueNames as e:
-                warn("Skipping Register: %s, %s" % (reg_xml.find("Name").text, str(e)))
+                warn(f'Skipping Register: {reg_xml.find("Name").text}, {str(e)}')
 
         self._fifos = {}
         for channel_xml in nifpga.find("DmaChannelAllocationList"):
@@ -48,9 +48,9 @@ class Bitfile(object):
                 fifo = Fifo(channel_xml)
                 self._fifos[fifo.name] = fifo
             except UnsupportedTypeError as e:
-                warn("Skipping FIFO: %s, %s" % (fifo.name, str(e)))
+                warn(f"Skipping FIFO: {fifo.name}, {str(e)}")
             except ClusterMustContainUniqueNames as e:
-                warn("Skipping FIFO: %s, %s" % (fifo.name, str(e)))
+                warn(f"Skipping FIFO: {fifo.name}, {str(e)}")
 
     @property
     def filepath(self):
@@ -114,7 +114,7 @@ def _parse_type(type_xml):
         return _FXP(name, type_xml)
     if type_name == "Array":
         return _Array(name, type_xml)
-    if type_name == "SGL" or type_name == "DBL":
+    if type_name in ["SGL", "DBL"]:
         return _Float(name, type_name)
     if type_name == "String":
         # Strings are not supported on the FPGA, but show up in error clusters
@@ -126,10 +126,7 @@ def _parse_type(type_xml):
 
 class _BaseType(object):
     def __init__(self, name):
-        if name is None:
-            self._name = ""
-        else:
-            self._name = name
+        self._name = "" if name is None else name
 
     @property
     def name(self):
@@ -171,7 +168,10 @@ class _Numeric(_BaseType):
                 self._datatype = datatype
                 break
         else:
-            raise UnsupportedTypeError("Unrecognized type encountered: %s.  Consider opening an issue on github.com/ni/nifpga" % type_name)
+            raise UnsupportedTypeError(
+                f"Unrecognized type encountered: {type_name}.  Consider opening an issue on github.com/ni/nifpga"
+            )
+
         self._signed = type_name[0].lower() == 'i'
         self._size_in_bits = int(type_name[1:])
         self._data_mask = (1 << self._size_in_bits) - 1
@@ -179,8 +179,7 @@ class _Numeric(_BaseType):
         self._unpack = self._unpack_numeric_signed if self._signed else self._unpack_numeric_unsigned
 
     def _unpack_numeric_unsigned(self, bits_from_fpga):
-        data = bits_from_fpga & self._data_mask
-        return data
+        return bits_from_fpga & self._data_mask
 
     def _unpack_numeric_signed(self, bits_from_fpga):
         data = bits_from_fpga & self._data_mask
@@ -214,10 +213,10 @@ class _Float(_BaseType):
     """ Handles packing and unpacking floating point values from the FPGA. """
     def __init__(self, name, type_name):
         super(_Float, self).__init__(name)
-        if "SGL" == type_name:
+        if type_name == "SGL":
             self._size_in_bits = 32
             self._datatype = DataType.Sgl
-        elif "DBL" == type_name:
+        elif type_name == "DBL":
             self._size_in_bits = 64
             self._datatype = DataType.Dbl
         self._data_mask = (1 << self._size_in_bits) - 1
@@ -329,10 +328,8 @@ class _Cluster(_BaseType):
         return result
 
     def pack_data(self, data_to_pack, packed_data):
-        i = 0
         for child in self._children:
             packed_data = child.pack_data(data_to_pack[child.name], packed_data)
-            i += 1
         return packed_data
 
 
@@ -362,7 +359,7 @@ class _Array(_BaseType):
 
     def unpack_data(self, data):
         results = [0] * self._size
-        for i in range(0, self._size):
+        for i in range(self._size):
             results[i] = self._subtype.unpack_data(data)
             data = data >> self._subtype.size_in_bits
         # Arrays are packed in order, which means that as we are grabbing out values
@@ -371,7 +368,7 @@ class _Array(_BaseType):
         return results
 
     def pack_data(self, data_to_pack, packed_data):
-        for i in range(0, self._size):
+        for i in range(self._size):
             packed_data = self._subtype.pack_data(data_to_pack[i], packed_data)
         return packed_data
 
@@ -386,10 +383,10 @@ class _FXP(_BaseType):
             raise UnsupportedTypeError("Unsupported FXP type encountered. This bitfile "
                                        "was likely compiled with LabVIEW Communications 2.0. "
                                        "Recompile with LabVIEW Communications 2.1 or later.")
-        self._signed = True if signed_tag.text.lower() == 'true' else False
+        self._signed = signed_tag.text.lower() == 'true'
         overflow_enabled_xml = type_xml.find("IncludeOverflowStatus")
         if overflow_enabled_xml is not None:
-            self._overflow_enabled = True if overflow_enabled_xml.text.lower() == 'true' else False
+            self._overflow_enabled = overflow_enabled_xml.text.lower() == 'true'
         else:
             self._overflow_enabled = False
         self._word_length = int(type_xml.find("WordLength").text)
@@ -432,11 +429,7 @@ class _FXP(_BaseType):
         the minimum value is not always accurate, therefore we must calculate
         it manually.
         """
-        if self._signed:
-            magnitude_bits = self._word_length - 1
-            return -1 * (2**(magnitude_bits) * self._delta)
-        else:
-            return 0
+        return -1 * (2**(self._word_length - 1) * self._delta) if self._signed else 0
 
     def _calculate_maximum(self):
         """ Determines the minimum possible value that can be represented with
@@ -444,10 +437,7 @@ class _FXP(_BaseType):
         the maximum value is not always accurate, therefore we must calculate
         it manually.
         """
-        if self._signed:
-            magnitude_bits = self._word_length - 1
-        else:
-            magnitude_bits = self._word_length
+        magnitude_bits = self._word_length - 1 if self._signed else self._word_length
         return (2**(magnitude_bits) - 1) * self._delta
 
     def _calculate_size_in_bits(self):
@@ -475,19 +465,14 @@ class _FXP(_BaseType):
         if self._signed:
             data = self._integer_twos_comp(data)
         decimal_value = data * self._delta
-        if self._overflow_enabled:
-            return (overflow, decimal_value)
-        else:
-            return decimal_value
+        return (overflow, decimal_value) if self._overflow_enabled else decimal_value
 
     def _get_overflow_value(self, data):
         """ Mask out all the data within the word length, leaving the overflow
         bit. If the result after masking the the word portion of the fixed
         point is nonzero that indicates the data read has overflowed. """
         mask = 2**(self._word_length)
-        if data & mask > 0:
-            return True
-        return False
+        return data & mask > 0
 
     def _remove_overflow_bit(self, data):
         """ This helper method masks out all bits not inside the word length,
@@ -597,14 +582,14 @@ class Register(object):
         """
         self._name = reg_xml.find("Name").text
         self._offset = int(reg_xml.find("Offset").text)
-        self._access_may_timeout = True if reg_xml.find("AccessMayTimeout").text.lower() == 'true' else False
-        self._internal = True if reg_xml.find("Internal").text.lower() == 'true' else False
+        self._access_may_timeout = (
+            reg_xml.find("AccessMayTimeout").text.lower() == 'true'
+        )
+
+        self._internal = reg_xml.find("Internal").text.lower() == 'true'
         datatype = reg_xml.find("Datatype")
         self._type = _parse_type(list(datatype)[0])
-        if self.is_array():
-            self._num_elements = self._type.size
-        else:
-            self._num_elements = 1
+        self._num_elements = self._type.size if self.is_array() else 1
 
     def __len__(self):
         """ Returns the number of elements in this register. """
@@ -670,11 +655,10 @@ class Fifo(object):
             # As of 2018 transfer size must be a power of two.
             if _is_not_power_of_2(self._transfer_size_bytes):
                 raise UnsupportedTypeError("This FIFO is incompatible with this version of 'nifpga'.  Upgrade to the latest version or open an issue on github.")
+        elif self._type.datatype is DataType.Fxp:
+            self._transfer_size_bytes = 8
         else:
-            if self._type.datatype is DataType.Fxp:
-                self._transfer_size_bytes = 8
-            else:
-                self._transfer_size_bytes = ctypes.sizeof(self._type.datatype._return_ctype())
+            self._transfer_size_bytes = ctypes.sizeof(self._type.datatype._return_ctype())
 
     @property
     def datatype(self):
@@ -706,4 +690,4 @@ class Fifo(object):
         return isinstance(self._type, _FXP)
 
     def is_composite(self):
-        return isinstance(self._type, _Cluster) or isinstance(self._type, _Array)
+        return isinstance(self._type, (_Cluster, _Array))

@@ -56,10 +56,7 @@ class FXPRegisterAsserts(object):
 
 
 def _calculate_minimum_fxp_value(register):
-    if register._signed:
-        return 2**(register._word_length - 1)
-    else:
-        return 0
+    return 2**(register._word_length - 1) if register._signed else 0
 
 
 def _calculate_maximum_fxp_value(register):
@@ -239,7 +236,7 @@ class FXPRegister32bitWord16bitIntegerOverflow(FXPRegisterSharedTests):
                                     integer_word_length=16)
         self.FxpAssert = FXPRegisterAsserts(self)
         """ binary String '(0) 0100010110010010.0011000100001100' """
-        self.fxp_value = int('0' + binary_string_32bit, 2)
+        self.fxp_value = int(f'0{binary_string_32bit}', 2)
         self.user_value = (False, Decimal(2**(1) + 2**(4) + 2**(7) + 2**(8)
                                           + 2**(10) + 2**(14) + 2**(-3)
                                           + 2**(-4) + 2**(-8) + 2**(-13)
@@ -279,5 +276,5 @@ class FXPRegister64bitWord64bitIntegerOverflow(FXPRegisterSharedTests):
                                     integer_word_length=64)
         self.FxpAssert = FXPRegisterAsserts(self)
         """(1) 0100 0101 1001 0010 0011 0001 0000 1100 0100 0101 1001 0010 0011 0001 0000 1100 """
-        self.fxp_value = int('1' + binary_string_32bit + binary_string_32bit, 2)
+        self.fxp_value = int(f'1{binary_string_32bit}{binary_string_32bit}', 2)
         self.user_value = (True, Decimal(5013123263993360652))

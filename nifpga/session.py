@@ -127,7 +127,7 @@ class Session(object):
         base_address_on_device = bitfile.base_address_on_device()
         for name, bitfile_register in iteritems(bitfile.registers):
             assert name not in self._registers, \
-                "One or more registers have the same name '%s', this is not supported" % name
+                    "One or more registers have the same name '%s', this is not supported" % name
             register = self._create_register(bitfile_register,
                                              base_address_on_device)
             if bitfile_register.is_internal():
@@ -138,7 +138,7 @@ class Session(object):
         self._fifos = {}
         for name, bitfile_fifo in iteritems(bitfile.fifos):
             assert name not in self._fifos, \
-                "One or more FIFOs have the same name '%s', this is not supported" % name
+                    "One or more FIFOs have the same name '%s', this is not supported" % name
             self._fifos[name] = self._create_fifo(bitfile_fifo)
 
     def __enter__(self):
@@ -196,7 +196,7 @@ class Session(object):
     def _irq_ordinals_to_bitmask(self, ordinals):
         bitmask = 0
         for ordinal in ordinals:
-            assert 0 <= ordinal and ordinal <= 31, "Valid IRQs are 0-31: %d is invalid" % ordinal
+            assert 0 <= ordinal <= 31, "Valid IRQs are 0-31: %d is invalid" % ordinal
             bitmask |= (1 << ordinal)
         return bitmask
 
@@ -252,10 +252,12 @@ class Session(object):
                                      self._irq_ordinals_to_bitmask(irqs))
 
     def _get_unique_register_or_fifo(self, name):
-        assert not (name in self._registers and name in self._fifos), \
+        assert name not in self._registers or name not in self._fifos, (
             "Ambiguous: '%s' is both a register and a FIFO" % name
+        )
+
         assert name in self._registers or name in self._fifos, \
-            "Unknown register or FIFO '%s'" % name
+                "Unknown register or FIFO '%s'" % name
         try:
             return self._registers[name]
         except KeyError:
@@ -283,23 +285,21 @@ class Session(object):
         return self._fifos
 
     def _create_register(self, bitfile_register, base_address_on_device):
-        # simple C type registers use the same entrypoint as the C API
-        if bitfile_register.type.is_c_api_type:
-            if bitfile_register.is_array():
-                return _ArrayRegister(self._session,
-                                      self._nifpga,
-                                      bitfile_register,
-                                      base_address_on_device)
-            else:
-                return _Register(self._session,
-                                 self._nifpga,
-                                 bitfile_register,
-                                 base_address_on_device)
-        else:  # register that handles conversion for more complex types
+        if not bitfile_register.type.is_c_api_type:
             return _DataConvertingRegister(self._session,
                                            self._nifpga,
                                            bitfile_register,
                                            base_address_on_device)
+        if bitfile_register.is_array():
+            return _ArrayRegister(self._session,
+                                  self._nifpga,
+                                  bitfile_register,
+                                  base_address_on_device)
+        else:
+            return _Register(self._session,
+                             self._nifpga,
+                             bitfile_register,
+                             base_address_on_device)
 
     def _create_fifo(self, bitfile_fifo):
         if bitfile_fifo.is_fxp():
@@ -331,11 +331,11 @@ class _Register(object):
         self._name = bitfile_register.name
         self._session = session
         if read_func is None:
-            self._read_func = nifpga["Read%s" % self.datatype]
+            self._read_func = nifpga[f"Read{self.datatype}"]
         else:
             self._read_func = read_func
         if write_func is None:
-            self._write_func = nifpga["Write%s" % self.datatype]
+            self._write_func = nifpga[f"Write{self.datatype}"]
         else:
             self._write_func = write_func
         self._ctype_type = self._datatype._return_ctype()
@@ -368,9 +368,7 @@ class _Register(object):
         """
         data = self._ctype_type()
         self._read_func(self._session, self._resource, data)
-        if self._datatype is DataType.Bool:
-            return bool(data.value)
-        return data.value
+        return bool(data.value) if self._datatype is DataType.Bool else data.value
 
     @property
     def name(self):
@@ -395,12 +393,15 @@ class _ArrayRegister(_Register):
                  nifpga,
                  bitfile_register,
                  base_address_on_device):
-        super(_ArrayRegister, self).__init__(session,
-                                             nifpga,
-                                             bitfile_register,
-                                             base_address_on_device,
-                                             read_func=nifpga["ReadArray%s" % bitfile_register.datatype],
-                                             write_func=nifpga["WriteArray%s" % bitfile_register.datatype])
+        super(_ArrayRegister, self).__init__(
+            session,
+            nifpga,
+            bitfile_register,
+            base_address_on_device,
+            read_func=nifpga[f"ReadArray{bitfile_register.datatype}"],
+            write_func=nifpga[f"WriteArray{bitfile_register.datatype}"],
+        )
+
         self._num_elements = len(bitfile_register)
         self._ctype_type = self._ctype_type * self._num_elements
 
@@ -438,8 +439,9 @@ class _ArrayRegister(_Register):
         """
         buf = self._ctype_type()
         self._read_func(self._session, self._resource, buf, len(self))
-        val = [bool(elem) if self._datatype is DataType.Bool else elem for elem in buf]
-        return val
+        return [
+            bool(elem) if self._datatype is DataType.Bool else elem for elem in buf
+        ]
 
 
 class _DataConvertingRegister(_Register):
@@ -471,8 +473,10 @@ class _DataConvertingRegister(_Register):
             nifpga,
             bitfile_register,
             base_address_on_device,
-            read_func=nifpga["ReadArray%s" % DataType.U32],
-            write_func=nifpga["WriteArray%s" % DataType.U32])
+            read_func=nifpga[f"ReadArray{DataType.U32}"],
+            write_func=nifpga[f"WriteArray{DataType.U32}"],
+        )
+
         self._transfer_len = int(ceil(self._type.size_in_bits / 32.0))
         self._ctype_type = self._ctype_type * self._transfer_len
 
@@ -484,7 +488,7 @@ class _DataConvertingRegister(_Register):
         """
         buf = self._ctype_type()
         self._read_func(self._session, self._resource, buf, self._transfer_len)
-        read_array = [elem for elem in buf]
+        read_array = list(buf)
         fpga_representation = self._combine_array_of_u32_into_one_value(read_array)
         return self._type.unpack_data(fpga_representation)
 
@@ -499,7 +503,7 @@ class _DataConvertingRegister(_Register):
 
         """
         combinedData = 0
-        for index in range(0, self._transfer_len):
+        for index in range(self._transfer_len):
             combinedData = (combinedData << 32) + data[index]
         if self._transfer_len > 1:
             combinedData = combinedData >> (32 * self._transfer_len - self._type.size_in_bits)
@@ -528,7 +532,7 @@ class _DataConvertingRegister(_Register):
 
         mask_32bit = (2**32) - 1
         extracted_array = []
-        for index in range(0, self._transfer_len):
+        for _ in range(self._transfer_len):
             extracted_array.append(data & mask_32bit)
             data = data >> 32
         extracted_array.reverse()
@@ -555,10 +559,10 @@ class _FIFO(object):
         self._number = bitfile_fifo.number
         self._session = session
         self._transfer_size_bytes = bitfile_fifo.transfer_size_bytes
-        self._write_func = nifpga["WriteFifo%s" % self._datatype]
-        self._read_func = nifpga["ReadFifo%s" % self._datatype]
-        self._acquire_read_func = nifpga["AcquireFifoReadElements%s" % self._datatype]
-        self._acquire_write_func = nifpga["AcquireFifoWriteElements%s" % self._datatype]
+        self._write_func = nifpga[f"WriteFifo{self._datatype}"]
+        self._read_func = nifpga[f"ReadFifo{self._datatype}"]
+        self._acquire_read_func = nifpga[f"AcquireFifoReadElements{self._datatype}"]
+        self._acquire_write_func = nifpga[f"AcquireFifoWriteElements{self._datatype}"]
         self._release_elements_func = nifpga["ReleaseFifoElements"]
         self._nifpga = nifpga
         self._ctype_type = self._datatype._return_ctype()
@@ -666,7 +670,7 @@ class _FIFO(object):
         if self._datatype is DataType.Bool:
             data = [bool(elem) for elem in buf]
         else:
-            data = [elem for elem in buf]
+            data = list(buf)
         return self.ReadValues(data=data,
                                elements_remaining=elements_remaining.value)
 
@@ -875,12 +879,17 @@ class _FIFO(object):
         prop_type = _fifo_properties_to_types[prop]
         value = (prop_type._return_ctype())(0)
         value_pointer = ctypes.pointer(value)
-        self._nifpga['GetFifoProperty%s' % prop_type](self._session, self._number, prop.value, value_pointer)
+        self._nifpga[f'GetFifoProperty{prop_type}'](
+            self._session, self._number, prop.value, value_pointer
+        )
+
         return value.value
 
     def _set_fifo_property(self, prop, value):
         prop_type = _fifo_properties_to_types[prop]
-        self._nifpga['SetFifoProperty%s' % prop_type](self._session, self._number, prop.value, value)
+        self._nifpga[f'SetFifoProperty{prop_type}'](
+            self._session, self._number, prop.value, value
+        )
 
     @property
     def buffer_allocation_granularity(self):
@@ -1246,10 +1255,10 @@ class _FIFODataAccessor(object):
     def __eq__(self, other):
         if len(other) != self._number_of_elements:
             return False
-        for index in xrange(0, self._number_of_elements):
-            if self[index] != other[index]:
-                return False
-        return True
+        return all(
+            self[index] == other[index]
+            for index in xrange(0, self._number_of_elements)
+        )
 
     def __str__(self):
         string_value = "["
@@ -1257,7 +1266,7 @@ class _FIFODataAccessor(object):
             string_value += str(self[index])
             if (index + 1) < self._number_of_elements:
                 string_value += ", "
-        return string_value + "]"
+        return f"{string_value}]"
 
     def __repr__(self):
         return str(self)

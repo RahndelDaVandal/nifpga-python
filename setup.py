@@ -19,9 +19,8 @@ def get_long_description():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     if not os.path.exists("README.md"):
         return ""
-    else:
-        with open(os.path.join(this_dir, "README.md")) as readme:
-            return readme.read().strip()
+    with open(os.path.join(this_dir, "README.md")) as readme:
+        return readme.read().strip()
 
 
 setup(name="nifpga",
