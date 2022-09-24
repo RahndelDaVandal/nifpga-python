@@ -64,14 +64,12 @@ def _raise_or_warn_if_nonzero_status(status, function_name, argument_names, *arg
     if status in codes_to_exception_classes:
         if status < 0:
             raise codes_to_exception_classes[status](function_name, argument_names, *args)
-        else:
-            warning = codes_to_exception_classes[status](function_name, argument_names, *args)
-            warnings.warn(warning)
+        warning = codes_to_exception_classes[status](function_name, argument_names, *args)
+        warnings.warn(warning)
+    elif status < 0:
+        raise UnknownError(status, function_name, argument_names, *args)
     else:
-        if status < 0:
-            raise UnknownError(status, function_name, argument_names, *args)
-        else:
-            warnings.warn(UnknownWarning(status, function_name, argument_names, *args))
+        warnings.warn(UnknownWarning(status, function_name, argument_names, *args))
 
 
 def check_status(function_name, argument_names):
@@ -124,12 +122,11 @@ class Status(BaseException):
         self._function_name = function_name
 
         self._named_args = []
-        for i, arg in enumerate(function_args):
-            self._named_args.append(
-                {
-                    "name": argument_names[i],
-                    "value": arg
-                })
+        self._named_args.extend(
+            {"name": argument_names[i], "value": arg}
+            for i, arg in enumerate(function_args)
+        )
+
         # this is also necessary to properly reconstruct the object when
         # passing it between processes
         super(Status, self).__init__(self._code,
@@ -211,11 +208,13 @@ class Status(BaseException):
                 elements remaining: 0x300L
                 a bogus string argument: 'I am a string'
         """
-        arg_string = ""
-        for arg in self._named_args:
-            arg_string += "\n\t%s: %s" % (arg["name"], self._stringify_arg(arg["value"]))
+        arg_string = "".join(
+            "\n\t%s: %s" % (arg["name"], self._stringify_arg(arg["value"]))
+            for arg in self._named_args
+        )
+
         return "%s: %s (%d) when calling '%s' with arguments:%s" \
-            % ("Error" if self._code < 0 else "Warning",
+                % ("Error" if self._code < 0 else "Warning",
                self._code_string,
                self._code,
                self._function_name,
@@ -357,7 +356,7 @@ for code, code_string in error_codes:
     # we need introduce a scope, otherwise code, and code_string
     # will all reference the same value.
     def add_classes(code, code_string):
-        classname = code_string + 'Error'
+        classname = f'{code_string}Error'
 
         def __init__(self, function_name, argument_names, function_args):
             ErrorStatus.__init__(self,
@@ -366,13 +365,14 @@ for code, code_string in error_codes:
                                  function_name=function_name,
                                  argument_names=argument_names,
                                  function_args=function_args)
+
         error_class = type(classname, (ErrorStatus,),
                            {'__init__': __init__, 'CODE': code})
         codes_to_exception_classes[code] = error_class
         # copy the exception type into module globals
         _g[error_class.__name__] = error_class
 
-        classname = code_string + 'Warning'
+        classname = f'{code_string}Warning'
 
         def __init__(self, function_name, argument_names, function_args):
             WarningStatus.__init__(self,
@@ -381,6 +381,7 @@ for code, code_string in error_codes:
                                    function_name=function_name,
                                    argument_names=argument_names,
                                    function_args=function_args)
+
         warning_class = type(classname, (WarningStatus,),
                              {'__init__': __init__, 'CODE': -code})
         codes_to_exception_classes[-code] = warning_class

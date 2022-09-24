@@ -52,14 +52,14 @@ class DataType(Enum):
         return _datatype_ctype[self]
 
     def isSigned(self):
-        if self == DataType.I8 \
-           or self == DataType.I16 \
-           or self == DataType.I32 \
-           or self == DataType.I64 \
-           or self == DataType.Sgl \
-           or self == DataType.Dbl:
-            return True
-        return False
+        return self in [
+            DataType.I8,
+            DataType.I16,
+            DataType.I32,
+            DataType.I64,
+            DataType.Sgl,
+            DataType.Dbl,
+        ]
 
 
 class FifoPropertyType(Enum):
@@ -395,113 +395,153 @@ class _NiFpga(StatusCheckedLibrary):
         ]  # list of function_infos
 
         for datatype in DataType:
-            if datatype == DataType.Fxp or datatype == DataType.Cluster:
+            if datatype in [DataType.Fxp, DataType.Cluster]:
                 continue  # Fxp and Cluster do not have named read write entry points.
             type_ctype = datatype._return_ctype()
-            library_function_infos.extend([
-                LibraryFunctionInfo(
-                    pretty_name="Read%s" % datatype,
-                    name_in_library="NiFpgaDll_Read%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("indicator", ctypes.c_uint32),
-                        NamedArgtype("value", ctypes.POINTER(type_ctype)),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="Write%s" % datatype,
-                    name_in_library="NiFpgaDll_Write%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("control", ctypes.c_uint32),
-                        NamedArgtype("value", type_ctype),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="ReadArray%s" % datatype,
-                    name_in_library="NiFpgaDll_ReadArray%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("indicator", ctypes.c_uint32),
-                        NamedArgtype("array", ctypes.POINTER(type_ctype)),
-                        NamedArgtype("size", ctypes.c_size_t),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="WriteArray%s" % datatype,
-                    name_in_library="NiFpgaDll_WriteArray%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("control", ctypes.c_uint32),
-                        NamedArgtype("array", ctypes.POINTER(type_ctype)),
-                        NamedArgtype("size", ctypes.c_size_t),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="ReadFifo%s" % datatype,
-                    name_in_library="NiFpgaDll_ReadFifo%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("fifo", ctypes.c_uint32),
-                        NamedArgtype("data", ctypes.POINTER(type_ctype)),
-                        NamedArgtype("number of elements", ctypes.c_size_t),
-                        NamedArgtype("timeout ms", ctypes.c_uint32),
-                        NamedArgtype("elements remaining", ctypes.POINTER(ctypes.c_size_t)),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="WriteFifo%s" % datatype,
-                    name_in_library="NiFpgaDll_WriteFifo%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("fifo", ctypes.c_uint32),
-                        NamedArgtype("data", ctypes.POINTER(type_ctype)),
-                        NamedArgtype("number of elements", ctypes.c_size_t),
-                        NamedArgtype("timeout ms", ctypes.c_uint32),
-                        NamedArgtype("empty elements remaining", ctypes.POINTER(ctypes.c_size_t)),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="AcquireFifoReadElements%s" % datatype,
-                    name_in_library="NiFpgaDll_AcquireFifoReadElements%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("fifo", ctypes.c_uint32),
-                        NamedArgtype("elements", ctypes.POINTER(ctypes.POINTER(type_ctype))),
-                        NamedArgtype("elements requested ", ctypes.c_size_t),
-                        NamedArgtype("timeout ms", ctypes.c_uint32),
-                        NamedArgtype("elements acquired", ctypes.POINTER(ctypes.c_size_t)),
-                        NamedArgtype("elements remaining", ctypes.POINTER(ctypes.c_size_t)),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="AcquireFifoWriteElements%s" % datatype,
-                    name_in_library="NiFpgaDll_AcquireFifoWriteElements%s" % datatype,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("fifo", ctypes.c_uint32),
-                        NamedArgtype("elements", ctypes.POINTER(ctypes.POINTER(type_ctype))),
-                        NamedArgtype("elements requested ", ctypes.c_size_t),
-                        NamedArgtype("timeout ms", ctypes.c_uint32),
-                        NamedArgtype("elements acquired", ctypes.POINTER(ctypes.c_size_t)),
-                        NamedArgtype("elements remaining", ctypes.POINTER(ctypes.c_size_t)),
-                    ]),
-            ])  # end of library_function_infos.extend() call
+            library_function_infos.extend(
+                [
+                    LibraryFunctionInfo(
+                        pretty_name=f"Read{datatype}",
+                        name_in_library=f"NiFpgaDll_Read{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("indicator", ctypes.c_uint32),
+                            NamedArgtype("value", ctypes.POINTER(type_ctype)),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"Write{datatype}",
+                        name_in_library=f"NiFpgaDll_Write{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("control", ctypes.c_uint32),
+                            NamedArgtype("value", type_ctype),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"ReadArray{datatype}",
+                        name_in_library=f"NiFpgaDll_ReadArray{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("indicator", ctypes.c_uint32),
+                            NamedArgtype("array", ctypes.POINTER(type_ctype)),
+                            NamedArgtype("size", ctypes.c_size_t),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"WriteArray{datatype}",
+                        name_in_library=f"NiFpgaDll_WriteArray{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("control", ctypes.c_uint32),
+                            NamedArgtype("array", ctypes.POINTER(type_ctype)),
+                            NamedArgtype("size", ctypes.c_size_t),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"ReadFifo{datatype}",
+                        name_in_library=f"NiFpgaDll_ReadFifo{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("fifo", ctypes.c_uint32),
+                            NamedArgtype("data", ctypes.POINTER(type_ctype)),
+                            NamedArgtype("number of elements", ctypes.c_size_t),
+                            NamedArgtype("timeout ms", ctypes.c_uint32),
+                            NamedArgtype(
+                                "elements remaining",
+                                ctypes.POINTER(ctypes.c_size_t),
+                            ),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"WriteFifo{datatype}",
+                        name_in_library=f"NiFpgaDll_WriteFifo{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("fifo", ctypes.c_uint32),
+                            NamedArgtype("data", ctypes.POINTER(type_ctype)),
+                            NamedArgtype("number of elements", ctypes.c_size_t),
+                            NamedArgtype("timeout ms", ctypes.c_uint32),
+                            NamedArgtype(
+                                "empty elements remaining",
+                                ctypes.POINTER(ctypes.c_size_t),
+                            ),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"AcquireFifoReadElements{datatype}",
+                        name_in_library=f"NiFpgaDll_AcquireFifoReadElements{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("fifo", ctypes.c_uint32),
+                            NamedArgtype(
+                                "elements",
+                                ctypes.POINTER(ctypes.POINTER(type_ctype)),
+                            ),
+                            NamedArgtype("elements requested ", ctypes.c_size_t),
+                            NamedArgtype("timeout ms", ctypes.c_uint32),
+                            NamedArgtype(
+                                "elements acquired",
+                                ctypes.POINTER(ctypes.c_size_t),
+                            ),
+                            NamedArgtype(
+                                "elements remaining",
+                                ctypes.POINTER(ctypes.c_size_t),
+                            ),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"AcquireFifoWriteElements{datatype}",
+                        name_in_library=f"NiFpgaDll_AcquireFifoWriteElements{datatype}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("fifo", ctypes.c_uint32),
+                            NamedArgtype(
+                                "elements",
+                                ctypes.POINTER(ctypes.POINTER(type_ctype)),
+                            ),
+                            NamedArgtype("elements requested ", ctypes.c_size_t),
+                            NamedArgtype("timeout ms", ctypes.c_uint32),
+                            NamedArgtype(
+                                "elements acquired",
+                                ctypes.POINTER(ctypes.c_size_t),
+                            ),
+                            NamedArgtype(
+                                "elements remaining",
+                                ctypes.POINTER(ctypes.c_size_t),
+                            ),
+                        ],
+                    ),
+                ]
+            )
+
         for fifoPropertyType in FifoPropertyType:
             type_ctype = fifoPropertyType._return_ctype()
-            library_function_infos.extend([
-                LibraryFunctionInfo(
-                    pretty_name="GetFifoProperty%s" % fifoPropertyType,
-                    name_in_library="NiFpgaDll_GetFifoProperty%s" % fifoPropertyType,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("fifo", ctypes.c_uint32),
-                        NamedArgtype("property", ctypes.c_uint32),
-                        NamedArgtype("value", ctypes.POINTER(type_ctype)),
-                    ]),
-                LibraryFunctionInfo(
-                    pretty_name="SetFifoProperty%s" % fifoPropertyType,
-                    name_in_library="NiFpgaDll_SetFifoProperty%s" % fifoPropertyType,
-                    named_argtypes=[
-                        NamedArgtype("session", _SessionType),
-                        NamedArgtype("fifo", ctypes.c_uint32),
-                        NamedArgtype("property", ctypes.c_uint32),
-                        NamedArgtype("value", type_ctype),
-                    ]),
-            ])
+            library_function_infos.extend(
+                [
+                    LibraryFunctionInfo(
+                        pretty_name=f"GetFifoProperty{fifoPropertyType}",
+                        name_in_library=f"NiFpgaDll_GetFifoProperty{fifoPropertyType}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("fifo", ctypes.c_uint32),
+                            NamedArgtype("property", ctypes.c_uint32),
+                            NamedArgtype("value", ctypes.POINTER(type_ctype)),
+                        ],
+                    ),
+                    LibraryFunctionInfo(
+                        pretty_name=f"SetFifoProperty{fifoPropertyType}",
+                        name_in_library=f"NiFpgaDll_SetFifoProperty{fifoPropertyType}",
+                        named_argtypes=[
+                            NamedArgtype("session", _SessionType),
+                            NamedArgtype("fifo", ctypes.c_uint32),
+                            NamedArgtype("property", ctypes.c_uint32),
+                            NamedArgtype("value", type_ctype),
+                        ],
+                    ),
+                ]
+            )
+
         # Add Composite FIFO Functions
         library_function_infos.extend([
             LibraryFunctionInfo(
